@@ -129,6 +129,7 @@ void ServerClient::ProcessMessage(QDataStream &in, qint8 mes, qint64 message_siz
 
         if (server->isVersionGood(this))
         {
+            server->finishesGame(this);
             state = MENU_STATE;
             server->wantToListenNews(this);
         }
@@ -172,7 +173,7 @@ void ServerClient::ProcessMessage(QDataStream &in, qint8 mes, qint64 message_siz
         qint32 index;
         in >> index;
 
-        server->leave(this, index);
+        server->leaveGame(this, index);
         return;
     }
     case CREATE_GAME:

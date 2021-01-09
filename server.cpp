@@ -4,8 +4,9 @@
 #include <QFile>
 
 #define PORT 64124
-#define VERSION 1320
+#define VERSION 2000
 
+// геометрия GUI сервера
 void Server::setgeometry()
 {
     this->setFixedSize(QSize(700, 400));
@@ -32,8 +33,10 @@ void Server::setgeometry()
     block->setFont(QFont("Book Antiqua", 14));
     block->setGeometry(600, 300, 100, 100);
 }
+
 Server::Server() : QMainWindow()
 {
+    // порт можно задать в текстовом файле
     int port = PORT;
     QFile * hostFile = new QFile("port.txt", this);
     if (hostFile->open(QIODevice::ReadOnly | QIODevice::Text))
@@ -45,12 +48,14 @@ Server::Server() : QMainWindow()
 
     setgeometry();
 
+    // инициализация сервера
     server = new QTcpServer(this);
     if (!server->listen(QHostAddress("0.0.0.0"), port))
         this->say("ERROR: Can't listen!");
     else
         this->say("Good afternoon. FortsAndMills are working on port #" + QString::number(port));
 
+    // все новые подключения обработаем в getConnection
     connect(server, SIGNAL(newConnection()), this, SLOT(getConnection()));
 }
 Server::~Server()
@@ -102,7 +107,7 @@ void Server::join(ServerClient *client, qint32 id)
     if (games[id].player_ids.size() == games[id].players_needed())
     {
         QList <qint32> random;
-        for (int i = 0; i < 1000; ++i)  // <undone> константа
+        for (int i = 0; i < 1000; ++i)  // TODO константа
             random << rand();
 
         QList <ServerClient *> opponents;
@@ -126,7 +131,7 @@ void Server::join(ServerClient *client, qint32 id)
         removeGame(id);
     }
 }
-void Server::leave(ServerClient *client, qint32 i)
+void Server::leaveGame(ServerClient *client, qint32 i)
 {
     say(client->id() + " leaves playing game #" + QString::number(i));
     games[i].player_ids.removeAll(client->ID);
@@ -149,11 +154,24 @@ void Server::removeGame(qint32 i)
     say("game #" + QString::number(i) + " is removed.", true);
     games.remove(i);
 }
+void Server::finishesGame(ServerClient *client)
+{
+    foreach (ServerClient * sc, client->opponents)
+        sc->opponents.removeAll(client);
+    if (client->opponents.size() == 0 && client->state == ServerClient::PLAYING)
+    {
+        say(client->id() + "'s game ends here");
+        playingDec();
+        playedInc();
+    }
+}
 
 void Server::getConnection()
 {
     ServerClient * New = new ServerClient(server->nextPendingConnection(), this, ids++);
 
+    // если на сервере нажать кнопку "блокировать",
+    // будет послано уведомление об обновлении сервера
     if (block->isChecked())
     {
         say("New connection blocked");
@@ -185,14 +203,7 @@ void Server::reconnected(ServerClient *client, qint32 ID)
 void Server::leave(ServerClient *client)
 {
     say(client->id() + " leaves!");
-    foreach (ServerClient * sc, client->opponents)
-        sc->opponents.removeAll(client);
-    if (client->opponents.size() == 0 && client->state == ServerClient::PLAYING)
-    {
-        say("game ends here", true);
-        playingDec();
-        playedInc();
-    }
+    finishesGame(client);
 
     if (client->state == ServerClient::MENU_STATE)
     {
@@ -200,7 +211,7 @@ void Server::leave(ServerClient *client)
         {
             if (it->player_ids.contains(client->ID))
             {
-                leave(client, it.key());
+                leaveGame(client, it.key());
                 break;
             }
         }
@@ -217,5 +228,5 @@ void Server::disconnected(ServerClient *client)
 
     for (QMap<qint32, Game>::iterator it = games.begin(); it != games.end(); ++it)
         if (it->player_ids.contains(client->ID))
-            leave(client, it.key());
+            leaveGame(client, it.key());
 }

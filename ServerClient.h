@@ -32,8 +32,6 @@ public:
     static const quint8 I_LEAVE = 8;  //
     static const quint8 CONNECTION_CHECK = 9; //
 
-    // наследство от прабабушки
-    static const quint8 _old_v_I_WANT_TO_PLAY = 2;  // qint32 version, QList <qint32> rules
     bool IS_OLD_VER = false;
 
     enum ClientState {INIT,MENU_STATE, PLAYING, FINAL_STATE};

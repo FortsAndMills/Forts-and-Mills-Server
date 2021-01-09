@@ -63,8 +63,9 @@ public:
     void wantToListenNews(ServerClient * client);
     void createGame(ServerClient *client, QList <qint32> rules);
     void join(ServerClient * client, qint32 i);
-    void leave(ServerClient * client, qint32 i);
+    void leaveGame(ServerClient * client, qint32 i);
     void removeGame(qint32 i);
+    void finishesGame(ServerClient *client);
 
 private:
     QMap <qint32, ServerClient *> clients;
