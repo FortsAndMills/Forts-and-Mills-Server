@@ -88,9 +88,10 @@ void Server::createGame(ServerClient * author, QList<qint32> rules)
     games[game_ids++] = Game(rules);
     say("Game #" + QString::number(game_ids - 1) + " created: " +
                 QString::number(rules[0]) + " pl, " +
-                QString::number(rules[1]) + "x" + QString::number(rules[2]) +
-                ", code " + QString::number(rules[3]) + "/" + QString::number(rules[4]) + ", " +
-                (rules[5] == 179 ? "CDT" : QString::number(rules[5]) + " dt"));
+                QString::number(rules[1]) + " timer type, " +
+                QString::number(rules[2]) + "x" + QString::number(rules[3]) +
+                ", code " + QString::number(rules[4]) + "/" + QString::number(rules[5]) + ", " +
+                (rules[6] == 179 ? "CDT" : QString::number(rules[6]) + " dt"));
 
     foreach (ServerClient * client, clients)
         client->sendNewGameCreated(game_ids - 1, rules, client == author);

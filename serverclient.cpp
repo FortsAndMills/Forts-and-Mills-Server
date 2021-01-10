@@ -126,16 +126,18 @@ void ServerClient::ProcessMessage(QDataStream &in, qint8 mes, qint64 message_siz
         in >> version;
         if (!in.atEnd() || in.status() != QDataStream::Ok)
             server->say("ERROR: WANT_TO_LISTEN_NEWS message came wrong!");
-
-        if (server->isVersionGood(this))
-        {
-            server->finishesGame(this);
-            state = MENU_STATE;
-            server->wantToListenNews(this);
-        }
         else
         {
-            badVersion();
+            if (server->isVersionGood(this))
+            {
+                server->finishesGame(this);
+                state = MENU_STATE;
+                server->wantToListenNews(this);
+            }
+            else
+            {
+                badVersion();
+            }
         }
         return;
     }
@@ -181,8 +183,8 @@ void ServerClient::ProcessMessage(QDataStream &in, qint8 mes, qint64 message_siz
         in >> rules;
         if (!in.atEnd() || in.status() != QDataStream::Ok)
             server->say("ERROR: CREATE_GAME message came wrong!");
-
-        server->createGame(this, rules);
+        else
+            server->createGame(this, rules);
         return;
     }
     case RESEND_THIS_TO_OPPONENT:
