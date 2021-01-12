@@ -66,6 +66,7 @@ public:
     void leaveGame(ServerClient * client, qint32 i);
     void removeGame(qint32 i);
     void finishesGame(ServerClient *client);
+    void ignore(qint32 ID);
 
 private:
     QMap <qint32, ServerClient *> clients;

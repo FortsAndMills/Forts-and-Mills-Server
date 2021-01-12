@@ -40,6 +40,7 @@ void ServerClient::blocked()
 void ServerClient::badVersion()
 {
     state = FINAL_STATE;
+    IS_OLD_VER = true;
 
     QByteArray block;
     QDataStream out(&block, QIODevice::WriteOnly);
@@ -50,9 +51,9 @@ void ServerClient::badVersion()
 
     server->say(id() + " has too old version, version = " + QString::number(version), true);
     socket->disconnectFromHost();
+    server->ignore(ID);
     this->deleteLater();
 }
-
 
 void ServerClient::disconnected()
 {

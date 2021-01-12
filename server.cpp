@@ -166,6 +166,10 @@ void Server::finishesGame(ServerClient *client)
         playedInc();
     }
 }
+void Server::ignore(qint32 ID)
+{
+    clients.remove(ID);
+}
 
 void Server::getConnection()
 {
@@ -231,3 +235,4 @@ void Server::disconnected(ServerClient *client)
         if (it->player_ids.contains(client->ID))
             leaveGame(client, it.key());
 }
+
