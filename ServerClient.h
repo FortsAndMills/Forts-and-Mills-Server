@@ -32,16 +32,17 @@ public:
     static const quint8 I_LEAVE = 8;  //
     static const quint8 CONNECTION_CHECK = 9; //
 
+    // с клиентами со старыми версиями не общаемся
     bool IS_OLD_VER = false;
+    qint32 version;
 
+    // главное меню или играет
     enum ClientState {INIT,MENU_STATE, PLAYING, FINAL_STATE};
     ClientState state = INIT;
-    QList <ServerClient *> opponents;
-    qint8 game_index;  // в игре
+    QList <ServerClient *> opponents;  // оппоненты в игре
+    qint8 game_index;  // индекс комнаты
 
-    qint32 version;
-    QList <qint32> rules;
-
+    // сокет для общения и id на сервере
     QTcpSocket * socket;
     qint32 ID;
     QString id() { return QString::number(ID); }
@@ -51,17 +52,20 @@ private:
 public:
     explicit ServerClient(QTcpSocket * socket, Server * server, int ID);
 
-public slots:
+public:
     void close()
     {
         socket->abort();
     }
+
+    // события, о которых нас может оповестить сервер
     void startPlaying(qint8 player_index, QList <ServerClient *> opponents, QList<qint32> random);
     void reconnect(QTcpSocket * qts);
-
     void blocked();
     void badVersion();
+    void error_happened();
 
+    // отправки сообщений
     void sendNews(QList <qint32> ids, QList <QList <qint32> > rules, QList <qint8> players)
     {
         QByteArray block;
@@ -107,7 +111,6 @@ public slots:
         out << (quint16)(block.size() - sizeof(quint16));
         socket->write(block);
     }
-
     void opponentDisconnected(ServerClient *op)
     {
         int i = 0;
@@ -156,15 +159,18 @@ public slots:
     }
 
 private:
-    qint16 BlockSize = 0;
+    qint16 BlockSize = 0;  // для чтения из сокета
 
+    // неотправленные игровые сообщения
     QMap<int, QByteArray> messages;
     qint16 mes_key = 0;
 
-public slots:
-    void read();
+    // обработка сообщений
     void ProcessMessage(QDataStream &in, qint8 mes, qint64 message_size);
-    void disconnected();
+
+public slots:
+    void read();          // можно что-то читать
+    void disconnected();  // вырубился
 };
 
 #endif // SERVERCLIENT_H

@@ -11,7 +11,7 @@ void Server::setgeometry()
 {
     this->setFixedSize(QSize(700, 400));
 
-    text = new QTextEdit(this);
+    text = new QPlainTextEdit(this);
     text->setFont(QFont("Book Antiqua", 16));
     text->setReadOnly(true);
     text->setGeometry(0, 0, 600, 400);
@@ -46,7 +46,21 @@ Server::Server() : QMainWindow()
         hostFile->close();
     }
 
+    // инициализация GUI
     setgeometry();
+
+    // также будем логгировать все события
+    log_file = new QFile("server_log.txt");
+    if (log_file->open(QIODevice::WriteOnly))
+    {
+        logger.setDevice(log_file);
+        logger << "Logger created." << Qt::endl;
+    }
+    else
+    {
+        say("ERROR: can't create log file!");
+        return;
+    }
 
     // инициализация сервера
     server = new QTcpServer(this);
@@ -62,6 +76,7 @@ Server::~Server()
 {
     foreach (ServerClient * client, clients)
         client->close();
+    log_file->close();
 }
 
 bool Server::isVersionGood(ServerClient *client)
@@ -70,6 +85,8 @@ bool Server::isVersionGood(ServerClient *client)
 }
 void Server::wantToListenNews(ServerClient *client)
 {
+    // клиент просит список всех текущих игр
+    // (вышел в главное меню или только-только подключился)
     QList<qint32> ids;
     QList < QList<qint32> > rules;
     QList <qint8> players;
@@ -85,7 +102,10 @@ void Server::wantToListenNews(ServerClient *client)
 }
 void Server::createGame(ServerClient * author, QList<qint32> rules)
 {
+    // создана новая комната
     games[game_ids++] = Game(rules);
+
+    // в логе можно посмотреть настройки созданной комнаты
     say("Game #" + QString::number(game_ids - 1) + " created: " +
                 QString::number(rules[0]) + " pl, " +
                 QString::number(rules[1]) + " timer type, " +
@@ -93,35 +113,46 @@ void Server::createGame(ServerClient * author, QList<qint32> rules)
                 ", code " + QString::number(rules[4]) + "/" + QString::number(rules[5]) + ", " +
                 (rules[6] == 179 ? "CDT" : QString::number(rules[6]) + " dt"));
 
-    foreach (ServerClient * client, clients)
-        client->sendNewGameCreated(game_ids - 1, rules, client == author);
-}
-void Server::join(ServerClient *client, qint32 id)
-{
-    say(client->id() + " wants to play game #" + QString::number(id));
-    games[id].player_ids.push_back(client->ID);
-
+    // отправка сообщения о новой комнате всем, кто в меню
     foreach (ServerClient * client, clients)
         if (client->state == ServerClient::MENU_STATE)
-            client->sendJoinMessage(id);
+            client->sendNewGameCreated(game_ids - 1, rules, client == author);
+}
+void Server::join(ServerClient *client, qint32 game_id)
+{
+    // клиент присоединился к игре
+    say(client->id() + " wants to play game #" + QString::number(game_id));
+    games[game_id].player_ids.push_back(client->ID);
 
-    if (games[id].player_ids.size() == games[id].players_needed())
+    // сообщаем всем, кто в меню
+    foreach (ServerClient * client, clients)
+        if (client->state == ServerClient::MENU_STATE)
+            client->sendJoinMessage(game_id);
+
+    // накопилось достаточное число игроков
+    if (games[game_id].player_ids.size() == games[game_id].players_needed())
     {
+        // создаём рандом сид
+        // он должен быть одинаковый у всех игроков
+        // (используется для создания карты)
         QList <qint32> random;
         for (int i = 0; i < 1000; ++i)  // TODO константа
             random << rand();
 
+        // создаём список клиентов-игроков
         QList <ServerClient *> opponents;
-        for (int i = 0; i < games[id].player_ids.size(); ++i)
+        for (int i = 0; i < games[game_id].player_ids.size(); ++i)
         {
-            opponents.push_back(clients[games[id].player_ids[i]]);
+            opponents.push_back(clients[games[game_id].player_ids[i]]);
         }
 
+        // всем отправляем сообщение о старте игры
         for (int i = 0; i < opponents.size(); ++i)
         {
             opponents[i]->startPlaying(i, opponents, random);
         }
 
+        // логгинг
         QString phr = opponents[0]->id();
         for (int i = 1; i < opponents.size(); ++i)
             phr += " and " + opponents[i]->id();
@@ -129,37 +160,49 @@ void Server::join(ServerClient *client, qint32 id)
 
         playingInc();
 
-        removeGame(id);
+        // удаляем игру из списка комнат
+        removeGame(game_id);
     }
 }
 void Server::leaveGame(ServerClient *client, qint32 i)
 {
+    // клиент покинул комнату
     say(client->id() + " leaves playing game #" + QString::number(i));
     games[i].player_ids.removeAll(client->ID);
 
+    // сообщаем всем, кто в меню
     foreach (ServerClient * client, clients)
         if (client->state == ServerClient::MENU_STATE)
             client->sendUnjoinMessage(i);
 
+    // если нету игроков, удаляем комнату
     if (games[i].player_ids.size() == 0)
     {
         removeGame(i);
     }
 }
-void Server::removeGame(qint32 i)
+void Server::removeGame(qint32 game_id)
 {
+    // сообщаем всем об удалении комнаты
     foreach (ServerClient * client, clients)
         if (client->state == ServerClient::MENU_STATE)
-            client->sendRemoveGameMessage(i);
+            client->sendRemoveGameMessage(game_id);
 
-    say("game #" + QString::number(i) + " is removed.", true);
-    games.remove(i);
+    // elfkztv
+    say("game #" + QString::number(game_id) + " is removed.", true);
+    games.remove(game_id);
 }
 void Server::finishesGame(ServerClient *client)
 {
+    // клиент закончил игру (вышел в главное меню или закрыл приложение)
+    // ему больше не нужно присылать игровые сообщения об этой партии
+    // удаляем его из списка оппонентов всех его оппонентов)))
     foreach (ServerClient * sc, client->opponents)
         sc->opponents.removeAll(client);
-    if (client->opponents.size() == 0 && client->state == ServerClient::PLAYING)
+
+    // игра заканчивается, если вышел последний игрок
+    // у которого оппонентов-то уже нет
+    if (client->opponents.size() == 0)
     {
         say(client->id() + "'s game ends here");
         playingDec();
@@ -168,7 +211,51 @@ void Server::finishesGame(ServerClient *client)
 }
 void Server::ignore(qint32 ID)
 {
+    // с этим клиентом не общаемся
     clients.remove(ID);
+}
+void Server::reconnected(ServerClient *client, qint32 ID)
+{
+    // клиент на самом деле переподключившийся клиент с данным ID
+    say(client->id() + " is reconnected " + QString::number(ID), true);
+    if (clients.contains(ID))
+    {
+        // делаем замену сокета у клиента с индексом ID
+        clients[ID]->reconnect(client->socket);
+        clients.remove(client->ID);
+
+        client->socket = NULL;  // не позволяем в деструкторе убить сокет
+        client->deleteLater();
+    }
+    else
+    {
+        say("...what happened?", true);
+    }
+}
+void Server::leave(ServerClient *client)
+{
+    // клиент закрыл приложение
+    say(client->id() + " leaves!");
+
+    // если клиент был в игре, надо убрать его из оппонентов
+    if (client->state == ServerClient::PLAYING)
+        finishesGame(client);
+
+    // если клиент был в главном меню, надо убрать его из всех комнат
+    if (client->state == ServerClient::MENU_STATE)
+    {
+        for (QMap<qint32, Game>::iterator it = games.begin(); it != games.end(); ++it)
+        {
+            if (it->player_ids.contains(client->ID))
+            {
+                leaveGame(client, it.key());
+                break;
+            }
+        }
+    }
+
+    // пока
+    clients.remove(client->ID);
 }
 
 void Server::getConnection()
@@ -190,47 +277,15 @@ void Server::getConnection()
     }
     qApp->alert(dynamic_cast<QWidget *>(this));
 }
-void Server::reconnected(ServerClient *client, qint32 ID)
-{
-    say(client->id() + " is reconnected " + QString::number(ID), true);
-    if (clients.contains(ID))
-    {
-        clients[ID]->reconnect(client->socket);
-        clients.remove(client->ID);
-        client->socket = NULL;
-        client->deleteLater();
-    }
-    else
-    {
-        say("...what happened?", true);
-    }
-}
-void Server::leave(ServerClient *client)
-{
-    say(client->id() + " leaves!");
-    finishesGame(client);
-
-    if (client->state == ServerClient::MENU_STATE)
-    {
-        for (QMap<qint32, Game>::iterator it = games.begin(); it != games.end(); ++it)
-        {
-            if (it->player_ids.contains(client->ID))
-            {
-                leaveGame(client, it.key());
-                break;
-            }
-        }
-    }
-
-    clients.remove(client->ID);
-}
 void Server::disconnected(ServerClient *client)
 {
+    // сообщаем его оппонентам, что товарищ вырубился
     foreach (ServerClient * sc, client->opponents)
         sc->opponentDisconnected(client);
 
     say(client->id() + " disconnected...");
 
+    // из комнат его точно выкидываем
     for (QMap<qint32, Game>::iterator it = games.begin(); it != games.end(); ++it)
         if (it->player_ids.contains(client->ID))
             leaveGame(client, it.key());

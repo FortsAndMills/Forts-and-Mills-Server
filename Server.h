@@ -3,7 +3,7 @@
 
 #include <QMap>
 #include <QMainWindow>
-#include <QTextEdit>
+#include <QPlainTextEdit>
 #include <QLabel>
 #include <QPushButton>
 #include <QTcpServer>
@@ -20,12 +20,17 @@ class Server : public QMainWindow
 
     QTcpServer * server;
 
-    QTextEdit * text;
+    // GUI и счётчики сыгранных / текущих игр.
+    QPlainTextEdit * text;
     int now = -1;
     QLabel * playing;
     int done = -1;
     QLabel * played;
     QPushButton * block;
+
+    // лог-файл
+    QFile * log_file;
+    QTextStream logger;
 
 private:
     void playingInc()
@@ -45,6 +50,7 @@ private:
     }
 
 public:
+    // добавление текста в лог и в GUI
     void say(QString NewText, bool sub = false)
     {
         if (sub)
@@ -52,26 +58,32 @@ public:
         else
             NewText = QDate::currentDate().toString() + " " + QTime::currentTime().toString() + ")\n    " + NewText + "\n";
 
-        text->setText(NewText + "\n" + text->toPlainText());
+        text->appendPlainText(NewText);
+        logger << NewText << Qt::endl;
     }
+
     explicit Server();
     ~Server();
 
     void setgeometry();
 
+    // функции, которые будут вызывать сами клиенты
     bool isVersionGood(ServerClient * client);
     void wantToListenNews(ServerClient * client);
     void createGame(ServerClient *client, QList <qint32> rules);
-    void join(ServerClient * client, qint32 i);
+    void join(ServerClient * client, qint32 game_id);
     void leaveGame(ServerClient * client, qint32 i);
-    void removeGame(qint32 i);
+    void removeGame(qint32 game_id);
     void finishesGame(ServerClient *client);
     void ignore(qint32 ID);
+    void reconnected(ServerClient * client, qint32 ID);
+    void leave(ServerClient * client);
 
 private:
     QMap <qint32, ServerClient *> clients;
     int ids = 0;
 
+    // "комнаты" в главной менюшке
     int game_ids = 0;
     struct Game
     {
@@ -82,12 +94,11 @@ private:
         Game(QList <qint32> _rules) : rules(_rules) {}
         Game() {}
     };
-
     QMap <qint32, Game > games;
+
+    // серверные события: новое подключение и отключение.
 public slots:
     void getConnection();
-    void reconnected(ServerClient * client, qint32 ID);
-    void leave(ServerClient * client);
     void disconnected(ServerClient * client);
 };
 
