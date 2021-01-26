@@ -4,7 +4,7 @@
 #include <QFile>
 
 #define PORT 64124
-#define VERSION 2000
+#define VERSION 2100
 
 // геометрия GUI сервера
 void Server::setgeometry()
