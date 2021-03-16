@@ -177,6 +177,7 @@ void ServerClient::ProcessMessage(QDataStream &in, qint8 mes, qint64 message_siz
             if (state == PLAYING)
                 server->finishesGame(this);
             state = MENU_STATE;  // мы точно вернулись в главное меню
+            opponents.clear();
 
             server->wantToListenNews(this);
         }
