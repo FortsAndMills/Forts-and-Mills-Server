@@ -286,7 +286,9 @@ void Server::disconnected(ServerClient *client)
     say(client->id() + " disconnected...");
 
     // из комнат его точно выкидываем
-    for (QMap<qint32, Game>::iterator it = games.begin(); it != games.end(); ++it)
+    // некоторые комнаты могут пропасть, поэтому создаёт копию мапы.
+    QMap<qint32, Game> current_games = games;
+    for (QMap<qint32, Game>::iterator it = current_games.begin(); it != current_games.end(); ++it)
         if (it->player_ids.contains(client->ID))
             leaveGame(client, it.key());
 }
